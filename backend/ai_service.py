@@ -17,7 +17,7 @@ def generate_chat_response(messages: list) -> str:
     try:
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
         response = client.chat.completions.create(
-            model="llama3-8b-8192",
+            model="openai/gpt-oss-20b",
             messages=messages,
         )
         return response.choices[0].message.content
