@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from database import create_db_and_tables
 
 app = FastAPI(title="Proyecto IA API")
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 # Configurar CORS para permitir peticiones desde el frontend
 app.add_middleware(
