@@ -8,6 +8,8 @@ interface Message {
 
 type TabType = 'chat' | 'trip' | 'recommend'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+
 function App() {
   // Estado de navegación
   const [activeTab, setActiveTab] = useState<TabType>('chat')
@@ -76,7 +78,7 @@ function App() {
 
     if (isRegistering) {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/register', {
+        const response = await fetch(`${API_URL}/api/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -111,7 +113,7 @@ function App() {
         formData.append('password', authPassword)
         formData.append('grant_type', 'password')
 
-        const response = await fetch('http://127.0.0.1:8000/api/login', {
+        const response = await fetch(`${API_URL}/api/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -152,7 +154,7 @@ function App() {
     setError(null)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/chat', {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,7 +202,7 @@ function App() {
     setTripResult(null)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/agent/trip', {
+      const response = await fetch(`${API_URL}/api/agent/trip`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,7 +248,7 @@ function App() {
     setRecResult(null)
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/agent/recommend', {
+      const response = await fetch(`${API_URL}/api/agent/recommend`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
