@@ -154,10 +154,41 @@ def chat(
     # 3. Buscar contexto relevante usando RAG
     contexto_recuperado = search_relevant_context(user_text)
 
-    # 4. Llamar a la IA pasando el contexto recuperado
+    # 4. Obtener o crear la sesión de chat actual del usuario
+    statement_session = (
+        select(ChatSession)
+        .where(ChatSession.user_id == current_user.id)
+        .order_by(ChatSession.id.desc())
+    )
+    chat_session = session.exec(statement_session).first()
+    if not chat_session:
+        chat_session = ChatSession(user_id=current_user.id)
+        session.add(chat_session)
+        session.commit()
+        session.refresh(chat_session)
+
+    # 5. Recuperar los últimos 10 mensajes de la base de datos para memoria conversacional
+    statement_messages = (
+        select(Message)
+        .where(Message.session_id == chat_session.id)
+        .order_by(Message.id.desc())
+        .limit(10)
+    )
+    recent_messages = session.exec(statement_messages).all()
+
+    # Invertir para mantener el orden cronológico
+    conversation_history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in reversed(recent_messages)
+    ]
+
+    # Agregar el nuevo mensaje del usuario al final del historial
+    conversation_history.append({"role": "user", "content": user_text})
+
+    # 6. Llamar a la IA pasando la lista completa (historial + nuevo mensaje) y el contexto RAG
     try:
         response_text = generate_chat_response(
-            request.messages,
+            conversation_history,
             context=contexto_recuperado,
         )
     except Exception as e:
@@ -166,25 +197,12 @@ def chat(
             detail=f"Error en el servicio de IA: {str(e)}",
         )
 
-    # 5. Estimar tokens usados (len(texto) // 4)
+    # 7. Estimar tokens usados (len(texto) // 4)
     user_tokens = max(1, len(user_text) // 4) if user_text else 0
     ai_tokens = max(1, len(response_text) // 4) if response_text else 0
     total_tokens = user_tokens + ai_tokens
 
-    # 6. Obtener o crear la sesión de chat asociada al usuario
-    statement = (
-        select(ChatSession)
-        .where(ChatSession.user_id == current_user.id)
-        .order_by(ChatSession.id.desc())
-    )
-    chat_session = session.exec(statement).first()
-    if not chat_session:
-        chat_session = ChatSession(user_id=current_user.id)
-        session.add(chat_session)
-        session.commit()
-        session.refresh(chat_session)
-
-    # 7. Guardar el mensaje del usuario y la respuesta de la IA en la base de datos
+    # 8. Guardar el nuevo mensaje del usuario y la respuesta de la IA en la base de datos
     user_msg = Message(
         session_id=chat_session.id,
         role="user",
@@ -200,13 +218,13 @@ def chat(
     session.add(user_msg)
     session.add(ai_msg)
 
-    # 8. Sumar tokens estimados al usuario y guardar cambios
+    # 9. Sumar tokens estimados al usuario y guardar cambios
     current_user.tokens_used += total_tokens
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
 
-    # 9. Calcular tokens restantes y devolver respuesta
+    # 10. Calcular tokens restantes y devolver respuesta
     tokens_remaining = max(0, current_user.token_limit - current_user.tokens_used)
 
     return {
