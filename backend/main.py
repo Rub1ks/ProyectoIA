@@ -15,7 +15,7 @@ from security import (
 )
 from ai_service import generate_chat_response
 from rag_service import search_relevant_context
-from agent_service import plan_trip
+from agent_service import plan_trip, recommend_items
 
 app = FastAPI(title="Proyecto IA API")
 
@@ -35,6 +35,10 @@ class UserRegister(BaseModel):
 class TripRequest(BaseModel):
     destination: str
     days: int
+
+
+class RecommendRequest(BaseModel):
+    category: str
 
 
 @app.on_event("startup")
@@ -286,4 +290,19 @@ def agent_trip(
         raise HTTPException(
             status_code=500,
             detail=f"Error en el agente de viajes: {str(e)}",
+        )
+
+
+@app.post("/api/agent/recommend")
+def agent_recommend(
+    request: RecommendRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        recommendation = recommend_items(category=request.category)
+        return {"recommendation": recommendation}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en el agente de recomendaciones: {str(e)}",
         )
