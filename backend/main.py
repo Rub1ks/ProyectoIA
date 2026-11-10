@@ -1,4 +1,3 @@
-from sqlalchemy import func
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +14,7 @@ from security import (
     decode_access_token,
 )
 from ai_service import generate_chat_response
+from rag_service import search_relevant_context
 
 app = FastAPI(title="Proyecto IA API")
 
@@ -143,22 +143,35 @@ def chat(
             detail="Límite de tokens excedido",
         )
 
-    # 2. Llamar a la IA para obtener la respuesta
+    # 2. Extraer el último mensaje del usuario (role == "user")
+    user_messages = [
+        msg.get("content", "")
+        for msg in request.messages
+        if msg.get("role") == "user"
+    ]
+    user_text = user_messages[-1] if user_messages else ""
+
+    # 3. Buscar contexto relevante usando RAG
+    contexto_recuperado = search_relevant_context(user_text)
+
+    # 4. Llamar a la IA pasando el contexto recuperado
     try:
-        response_text = generate_chat_response(request.messages)
+        response_text = generate_chat_response(
+            request.messages,
+            context=contexto_recuperado,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error en el servicio de IA: {str(e)}",
         )
 
-    # 3. Estimar tokens usados (len(texto) // 4)
-    user_text = request.messages[-1].get("content", "") if request.messages else ""
+    # 5. Estimar tokens usados (len(texto) // 4)
     user_tokens = max(1, len(user_text) // 4) if user_text else 0
     ai_tokens = max(1, len(response_text) // 4) if response_text else 0
     total_tokens = user_tokens + ai_tokens
 
-    # 4. Obtener o crear la sesión de chat asociada al usuario
+    # 6. Obtener o crear la sesión de chat asociada al usuario
     statement = (
         select(ChatSession)
         .where(ChatSession.user_id == current_user.id)
@@ -171,7 +184,7 @@ def chat(
         session.commit()
         session.refresh(chat_session)
 
-    # 5. Guardar el mensaje del usuario y la respuesta de la IA en la base de datos
+    # 7. Guardar el mensaje del usuario y la respuesta de la IA en la base de datos
     user_msg = Message(
         session_id=chat_session.id,
         role="user",
@@ -187,13 +200,13 @@ def chat(
     session.add(user_msg)
     session.add(ai_msg)
 
-    # 6. Sumar tokens estimados al usuario y guardar cambios
+    # 8. Sumar tokens estimados al usuario y guardar cambios
     current_user.tokens_used += total_tokens
     session.add(current_user)
     session.commit()
     session.refresh(current_user)
 
-    # 7. Calcular tokens restantes y devolver respuesta
+    # 9. Calcular tokens restantes y devolver respuesta
     tokens_remaining = max(0, current_user.token_limit - current_user.tokens_used)
 
     return {
