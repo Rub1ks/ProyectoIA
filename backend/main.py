@@ -1,9 +1,10 @@
+from sqlalchemy import func
 from typing import List, Dict
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from database import create_db_and_tables, get_session
 from models import User, ChatSession, Message
@@ -199,3 +200,38 @@ def chat(
         "response": response_text,
         "tokens_remaining": tokens_remaining,
     }
+
+
+@app.get("/api/reports/usage")
+def get_usage_report(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    # Consulta agregada con SQLModel: suma de tokens y fecha de último mensaje por usuario
+    statement = (
+        select(
+            User.email,
+            User.role,
+            func.coalesce(func.sum(Message.tokens_used), 0).label("total_tokens_used"),
+            func.max(Message.timestamp).label("last_activity"),
+        )
+        .outerjoin(ChatSession, User.id == ChatSession.user_id)
+        .outerjoin(Message, ChatSession.id == Message.session_id)
+        .group_by(User.id, User.email, User.role)
+    )
+
+    # Si no es admin, limitar el reporte únicamente al usuario autenticado
+    if current_user.role != "admin":
+        statement = statement.where(User.id == current_user.id)
+
+    results = session.exec(statement).all()
+
+    return [
+        {
+            "email": row.email,
+            "role": row.role,
+            "total_tokens_used": int(row.total_tokens_used),
+            "last_activity": row.last_activity,
+        }
+        for row in results
+    ]
