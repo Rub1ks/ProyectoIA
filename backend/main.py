@@ -15,6 +15,7 @@ from security import (
 )
 from ai_service import generate_chat_response
 from rag_service import search_relevant_context
+from agent_service import plan_trip
 
 app = FastAPI(title="Proyecto IA API")
 
@@ -29,6 +30,11 @@ class ChatRequest(BaseModel):
 class UserRegister(BaseModel):
     email: str
     password: str
+
+
+class TripRequest(BaseModel):
+    destination: str
+    days: int
 
 
 @app.on_event("startup")
@@ -266,3 +272,18 @@ def get_usage_report(
         }
         for row in results
     ]
+
+
+@app.post("/api/agent/trip")
+def agent_trip(
+    request: TripRequest,
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        itinerary = plan_trip(destination=request.destination, days=request.days)
+        return {"itinerary": itinerary}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error en el agente de viajes: {str(e)}",
+        )
