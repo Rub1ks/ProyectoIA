@@ -35,3 +35,11 @@ class Message(SQLModel, table=True):
 
     # Relación con la sesión de chat
     session: Optional[ChatSession] = Relationship(back_populates="messages")
+
+
+class Document(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    content: str
+    category: str
+

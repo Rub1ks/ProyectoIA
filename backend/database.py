@@ -2,9 +2,9 @@ from sqlmodel import SQLModel, Session, create_engine
 
 # Importar modelos para asegurar que se registren en SQLModel.metadata
 try:
-    from models import User, ChatSession, Message
+    from models import User, ChatSession, Message, Document
 except ImportError:
-    from backend.models import User, ChatSession, Message
+    from backend.models import User, ChatSession, Message, Document
 
 sqlite_file_name = "app.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
